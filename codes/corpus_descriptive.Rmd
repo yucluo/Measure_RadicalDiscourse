@@ -1,0 +1,140 @@
+---
+title: "Corpus_Descriptives"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(scales)
+library(data.table)
+library(tidyverse)
+library(lubridate)
+library( plyr )
+
+```
+
+# Test Data Validity 
+
+```{r load the metadata}
+# define a function to read files while adding the candidate info
+readFun <- function( filename ) {
+
+    # read in the data
+    data <- read.csv( filename, 
+                      header = FALSE, 
+                      col.names = c( "Link", "Title", "Date" ) )
+
+    # add a "Candidate" and "Year" column based on file name
+    data$Candidate <- str_match(filename, "META(.*?)[[:digit:]]")[,2]
+    data$Term = str_extract(filename, "[0-9]+")
+    
+
+    return( data )
+}
+
+# execute that function across all files, outputting a data frame
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/metaALL")
+metaALL <- ldply( .data = list.files(pattern="*.csv"),
+                          .fun = readFun,
+                          .parallel = TRUE ) 
+metaALL$Date = as.POSIXct(metaALL$Date)
+
+# this is our dataset 
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/meta")
+meta <- ldply( .data = list.files(pattern="*.csv"),
+                          .fun = readFun,
+                          .parallel = TRUE ) 
+meta$Date = as.POSIXct(meta$Date)
+```
+
+First we test to see when we broaden our scrape criteria (from annoucing candidacy to election day) whether will get similar data size compared to Yaoyao and Alex's dataset. 
+```{r check size}
+# get rid of non election year result
+sub = subset(metaALL, !(format(Date, "%Y") %in% c(2001,2002, 2005, 2006, 2009, 2010, 2013, 2014)))
+
+# the broader time frame is estimated roughly as May of previous year to november in election year
+sub = subset(sub, as.numeric(format(Date, "%m")) > 5 &  as.numeric(format(Date, "%m") < 11) & as.numeric(format(Date, "%Y")) > 1998 & as.numeric(format(Date, "%Y")) < 2017 )
+
+# get only remarks 
+sub2 =  sub[grepl("[Rr]emarks", sub$Title),]
+
+print(nrow(sub2))
+
+```
+So we get around 1800 speeches this way which is pretty close to their 2000. 
+
+
+## Plot speech distribution by candidate and term
+Now we return to our dataset and plot the distribution. 
+```{r words}
+
+ggplot(meta , aes(x = Term, fill = Candidate)) +
+    geom_histogram(stat = "count", position = "dodge") +
+    theme_bw() + labs(x = "Election Year")
+
+```
+
+
+# Word Counts
+```{r word count}
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/")
+
+
+
+folders = list.files(full.names = F , recursive = F, pattern='speeches*')
+
+wd_ct = data.table(candidate = character(), 
+                   word_ct = integer())
+
+wd_ct = vector(mode = "list", length = length(folders))
+
+# loop through all folders to count words 
+for(i in 1:length(folders)){
+  path =  paste0("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/", folders[i])
+  setwd(path)
+  all_files = list.files(pattern = "*.txt")
+  WordLen = sapply(all_files, function(x){
+    t <- read_file(x) # load file
+    WordLen = sapply(strsplit(t, " "), length)
+    return(WordLen)
+})
+  wd_ct[[i]] = WordLen
+}
+
+# total number of words in the corpus
+print(sum(sapply(wd_ct, sum)))
+
+print(data.table(candidate = c("Bush", "Clinton", "Gore", "Kerry", "McCain", "Obama", "Romney", "Trump"),
+median = sapply(wd_ct, median),
+min = sapply(wd_ct, min),
+max = sapply(wd_ct, max),
+sd = sapply(wd_ct, sd))
+)
+```
+
+
+# Active Learning: A Case of Semi-supervised Machine Learning 
+
+
+* The main hypothesis in active learning is that if a learning algorithm can choose the data it wants to learn from, it can perform better than traditional methods with substantially less data for training.
+* Steps for active learning
+  + A very small subsample of this data needs to be manually labelled. There is no convention on how many data points should be chosen.
+  + Train a classifier model on this labelled set. 
+  + The trained model is used to predict the class of each remaining unlabelled data points.
+  + Based on a chosen query score, we choose new data points (however many we want) from the unlabelled dataset and add to the training set. 
+  + Iterate the process until a stopping criteria is reached (number of iterations, number of instances queried, or when performance no longer improves significantly)
+* Query functions: there are three main types 
+ + least confidence: the easiest way. The learner selects the instance for which it has the least confidence i.e. the probability of the most probable label.
+ + margin sampling: selecting the instance that has the smallest difference between the first and second most probable labels. 
+ + Entropy Sampling: entropy utilizes all the possible label probabilities, and roughly measures the uncertainty of a model.  If a model is highly certain about a class for a given data point, it will probably have a high certainty for a particular class, whereas all the other classes will have low probability. The entropy formula is applied to each instance and the instance with the largest value is queried. (This is the method that Yaoyao and Alex used. They used a built-in uncertainty measure in modAL, a Python3 library) Here are some instructions on how to use this python library [https://github.com/modAL-python/modAL]
+ 
+
+
+
+
+
+
