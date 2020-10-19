@@ -13,8 +13,7 @@ library(scales)
 library(data.table)
 library(tidyverse)
 library(lubridate)
-library( plyr )
-
+library(plyr)
 ```
 
 # Test Data Validity 
@@ -26,7 +25,7 @@ readFun <- function( filename ) {
     # read in the data
     data <- read.csv( filename, 
                       header = FALSE, 
-                      col.names = c( "Link", "Title", "Date" ) )
+                      col.names = c( "Link", "Title", "Date", "Location" ) )
 
     # add a "Candidate" and "Year" column based on file name
     data$Candidate <- str_match(filename, "META(.*?)[[:digit:]]")[,2]
@@ -84,7 +83,6 @@ ggplot(meta , aes(x = Term, fill = Candidate)) +
 setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/")
 
 
-
 folders = list.files(full.names = F , recursive = F, pattern='speeches*')
 
 wd_ct = data.table(candidate = character(), 
@@ -131,8 +129,10 @@ sd = sapply(wd_ct, sd))
  + least confidence: the easiest way. The learner selects the instance for which it has the least confidence i.e. the probability of the most probable label.
  + margin sampling: selecting the instance that has the smallest difference between the first and second most probable labels. 
  + Entropy Sampling: entropy utilizes all the possible label probabilities, and roughly measures the uncertainty of a model.  If a model is highly certain about a class for a given data point, it will probably have a high certainty for a particular class, whereas all the other classes will have low probability. The entropy formula is applied to each instance and the instance with the largest value is queried. (This is the method that Yaoyao and Alex used. They used a built-in uncertainty measure in modAL, a Python3 library) Here are some instructions on how to use this python library [https://github.com/modAL-python/modAL]
- 
 
+* Literature on Active Learning
+  + I found one paper written by not computer scientists (by polisci researchers at LSE, NYU and Michigan)
+  [http://www-personal.umich.edu/~wmebane/Paper_Active_Learning_Approaches_for_Labeling_Text.pdf]. This paper is aimed at introducing active learning to the field and did a couple of tests on various corpora to prove the supriority of this method compared with random sampling (passive learning). 
 
 
 

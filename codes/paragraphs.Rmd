@@ -1,0 +1,306 @@
+---
+title: "Paragraphs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(scales)
+library(data.table)
+library(tidyverse)
+library(lubridate)
+library(plyr)
+```
+
+# Test Data Validity 
+
+```{r load the metadata}
+# define a function to read files while adding the candidate info
+readFun <- function( filename ) {
+
+    # read in the data
+    data <- read.csv( filename, 
+                      header = FALSE, 
+                      col.names = c( "Link", "Title", "Date", "Location" ) )
+
+    # add a "Candidate" and "Year" column based on file name
+    data$Candidate <- str_match(filename, "META(.*?)[[:digit:]]")[,2]
+    data$Term = str_extract(filename, "[0-9]+")
+    
+
+    return( data )
+}
+
+# execute that function across all files, outputting a data frame
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/metaALL")
+metaALL <- ldply( .data = list.files(pattern="*.csv"),
+                          .fun = readFun,
+                          .parallel = TRUE ) 
+metaALL$Date = as.POSIXct(metaALL$Date)
+
+# this is our dataset 
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/meta")
+meta <- ldply( .data = list.files(pattern="*.csv"),
+                          .fun = readFun,
+                          .parallel = TRUE ) 
+meta$Date = as.POSIXct(meta$Date)
+```
+
+First we test to see when we broaden our scrape criteria (from annoucing candidacy to election day) whether will get similar data size compared to Yaoyao and Alex's dataset. 
+```{r check size}
+# get rid of non election year result
+sub = subset(metaALL, !(format(Date, "%Y") %in% c(2001,2002, 2005, 2006, 2009, 2010, 2013, 2014)))
+
+# the broader time frame is estimated roughly as May of previous year to november in election year
+sub = subset(sub, as.numeric(format(Date, "%m")) > 5 &  as.numeric(format(Date, "%m") < 11) & as.numeric(format(Date, "%Y")) > 1998 & as.numeric(format(Date, "%Y")) < 2017 )
+
+# get only remarks 
+sub2 =  sub[grepl("[Rr]emarks", sub$Title),]
+
+print(nrow(sub2))
+
+```
+So we get around 1800 speeches this way which is pretty close to their 2000. 
+
+
+## Plot speech distribution by candidate and term
+Now we return to our dataset and plot the distribution. 
+```{r distribution}
+
+ggplot(meta , aes(x = Term, fill = Candidate)) +
+    geom_histogram(stat = "count", position = "dodge") +
+    theme_bw() + labs(x = "Election Year")
+
+```
+
+
+# Word Counts
+```{r word count}
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/")
+
+
+folders = list.files(full.names = F , recursive = F, pattern='speeches*')
+
+wd_ct = data.table(candidate = character(), 
+                   word_ct = integer())
+
+wd_ct = vector(mode = "list", length = length(folders))
+
+# loop through all folders to count words 
+for(i in 1:length(folders)){
+  path =  paste0("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/", folders[i])
+  setwd(path)
+  all_files = list.files(pattern = "*.txt")
+  WordLen = sapply(all_files, function(x){
+    t <- read_file(x) # load file
+    WordLen = sapply(strsplit(t, " "), length)
+    return(WordLen)
+})
+  wd_ct[[i]] = WordLen
+}
+
+# total number of words in the corpus
+print(sum(sapply(wd_ct, sum)))
+
+print(data.table(candidate = c("Bush", "Clinton", "Gore", "Kerry", "McCain", "Obama", "Romney", "Trump"),
+median = sapply(wd_ct, median),
+min = sapply(wd_ct, min),
+max = sapply(wd_ct, max),
+sd = sapply(wd_ct, sd))
+)
+```
+
+
+```{r separate into paragraph}
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/")
+
+
+folders = list.files(full.names = F , recursive = F, pattern='speeches*')
+
+library(data.table)
+library(tokenizers)
+
+# loop through all folders to save each paragraph in the dataframe
+df = data.table(texts = character(), candidate = character(), term = character(), title = character() , comp = character())
+for(i in 1:length(folders)){
+  path =  paste0("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/", folders[i])
+  setwd(path)
+  all_files = list.files(pattern = "*.txt")
+  # speech_df = data.table(texts = character(), candidate = character(), term = character(), title = character() )
+  for (j in 1:length(all_files)){
+    t <- read_file(all_files[j]) # load file
+    cand = sub("-speech.*", "", all_files[j])
+    term = str_match(all_files[j], "speech-\\s*(.*?)\\s*-")[,2]
+    speech_title = all_files[j]
+    pars = strsplit(t, "\n")[[1]]
+    pars = pars[pars != ""] #delete empty paragraphs
+    pars = sapply(pars,function(x){gsub(" \\[[^][]*]", "", x)}) #delete everything in square brackets and the space before it
+    for (k in 1:length(pars)){
+      sents = unlist(tokenize_sentences(pars[k]))
+      entries = data.table(pars = character(), comp = character())
+      if (length(sents) >2){
+        entry = cbind(pars = pars[k], comp = "FALSE")
+        entries = rbind(entries, entry)
+        print(entries)
+          }
+      else if (k < length(pars)){
+            combined = paste(pars[k], pars[k +1], sep = " ")
+            k = k+1 
+            entry = data.table(pars = combined, comp = "TRUE")
+            entries = rbind(entries, entry)
+            print(entry)
+      }
+      else if(k> 1){
+
+            entries[k-1, pars] = paste(pars[k-1], pars[k], sep = " ")
+            entries[k-1, comp] = "TRUE"
+      }
+      cand_df = rep(cand, times = length(entries))
+    term_df = rep(term, times = length(entries))
+    pars_df = data.table(texts = entries$pars, candidate = cand_df, term = term_df, title = speech_title, comp = entries$comp)}
+    }
+
+   df = rbind(df, pars_df)
+  
+}
+
+print(head(df))
+
+for (i in 1:nrow(df)){
+  df$n_sent[i] = length(unlist(tokenize_sentences(df[i,texts])))
+}
+
+df %>% filter(n_sent<10) %>%
+ggplot(aes(x = n_sent))+
+  geom_histogram(binwidth = 1)
+
+# print the percentage of paragraphs fewer than 3
+print(nrow(df[df[ ,as.numeric(n_sent ) < 3]])/nrow(df))
+```
+
+
+```{r combine short paragraph}
+df_new = data.table(texts = character(), candidate = character(), term = character(), title = character(), comp = character())
+
+df$n_sent = NULL
+
+for(i in 1:nrow(df)){
+  sents = unlist(tokenize_sentences(df[i,texts]))
+  if (length(sents) >2){
+    entry = cbind(df[i], comp = "no")
+    df_new = rbind(df_new, entry)
+  }
+  # makes sure the next one is also short and has the same title 
+  else if (#(length(unlist(strsplit(df[i+1, texts], "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))) < 3) &&
+            length(sents) <3 &&
+            df[i, title] == df[i + 1, title] && i < nrow(df)) {
+            combined = paste(df[i, texts], df[i +1, texts], sep = " ")
+            i = i+1 #skip the next (i+ 1)row
+    # check again to see if combined paragraph has <3 sentences 
+    if (length(unlist(tokenize_sentences(combined))) < 3 && df[i, title] == df[i + 1, title] ){
+        combined_3 = paste(combined, df[i +1, texts], sep = " ") # if yes combine the next one too
+        i = i + 1 #skip the next next (i + 1 + 1)
+        entry = data.table(texts = combined_3, candidate = df[i, candidate], term = df[i, term], title = df[i, title], comp = "yes")
+        df_new = rbind(df_new, entry) # add the 3rd combined text to new df 
+    }
+    else {
+      entry = data.table(texts = combined, candidate = df[i, candidate], term = df[i, term], title = df[i, title], comp = "yes")
+      df_new = rbind(df_new, entry) # if one combine is enough then add the once combined text to new df 
+    }
+  }
+}
+
+
+# combine short paragraph with their nearest neighbor
+df_comp = copy(df_new)
+for (i in 1: nrow(df_comp)){
+    pars = unlist(tokenize_sentences(df_comp[i, texts]))
+    if (length(pars) <3){
+      if (df_comp[i, title] == df_comp[i + 1, title] && i < nrow(df_comp)){
+        combined = paste(df_comp[i, texts], df_comp[i +1, texts], sep = " \n ")
+        df_comp[i+1, texts := combined] # add combined paragraph to next row
+        df_comp = df_comp[-i,] #delete the short paragraph
+        df_comp[i, comp = "yes"]
+        
+      }
+      else if (df_comp[i, title] == df_comp[i - 1, title]){
+        combined = paste(df_comp[i -1, texts], df_comp[i, texts], sep = " \n ")
+        df_comp[i - 1, texts := combined] # add combined to previous row
+        df_comp = df_comp[-i,] #delete the short paragraph
+        df_comp[i, comp = "yes"]
+
+      }
+  }
+}
+
+
+
+for (i in 1:nrow(df_new)){
+  df_new$n_sent[i] = length(unlist(tokenize_sentences(df_new[i,texts])))
+}
+
+print(nrow(df_new[df_new[ ,as.numeric(n_sent ) < 3]])/nrow(df_new))
+
+
+for(i in 1:nrow(df)){
+  par = unlist(strsplit(df[i, texts], "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))
+  if (length(par) >2){
+    df_new = rbind(df_new, df[i])
+  }
+  # makes sure the next one is also short and has the same title 
+  else if ((length(unlist(strsplit(df[i+1, texts], "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))) < 3) && df[i, title] == df[i + 1, title] && i < nrow(df)) {
+    combined = paste(df[i, texts], df[i +1, texts], sep = "/")
+    i = i+1 #skip the next (i+ 1)row
+    # check again to see if combined paragraph has <3 sentences 
+    if ((length(unlist(strsplit(combined, "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))) < 3) && df[i, title] == df[i + 1, title] ){
+        combined_3 = paste(combined, df[i +1, texts], sep = "/") # if yes combine the next one too
+        i = i + 1 #skip the next next (i + 1 + 1)
+        df_new = rbind(df_new, data.table(texts = combined_3, candidate = df[i, candidate], term = df[i, term], title = df[i, title])) # add the 3rd combined text to new df 
+    }
+    else {
+      df_new = rbind(df_new, data.table(texts = combined, candidate = df[i, candidate], term = df[i, term], title = df[i, title])) # if one combine is enough then add the once combined text to new df 
+    }
+  }
+}
+
+df_new = data.table(texts = character(), candidate = character(), term = character(), title = character())
+
+df$n_sent = NULL
+
+
+
+```
+
+
+for(i in 1:nrow(df)){
+  par = unlist(strsplit(df[i, texts], "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))
+  if (length(par) >2){
+    df_new = rbind(df_new, df[i])
+  }
+  # makes sure the next one has the same title and i is not the last one
+  else if ( df[i, title] == df[i + 1, title] && i < nrow(df)) {
+    combined = paste(df[i, texts], df[i +1, texts], sep = "/")
+    i = i+1 #skip the next (i+ 1)row
+    # check again to see if combined paragraph has <3 sentences 
+    if ((length(unlist(strsplit(combined, "(?<=[[:punct:]])\\s(?=[A-Z])", perl=T))) < 3) && df[i, title] == df[i + 1, title] ){
+        combined_3 = paste(combined, df[i +1, texts], sep = "/") # if yes combine the next one too
+        i = i + 1 #skip the next next (i + 1 + 1)
+        df_new = rbind(df_new, data.table(texts = combined_3, candidate = df[i, candidate], term = df[i, term], title = df[i, title])) # add the 3rd combined text to new df 
+    }
+    else {
+      df_new = rbind(df_new, data.table(texts = combined, candidate = df[i, candidate], term = df[i, term], title = df[i, title])) # if one combine is enough then add the once combined text to new df 
+    }
+  }
+}
+
+for (i in 1:nrow(df_new)){
+  df_new$n_sent[i] = length(unlist(tokenize_sentences(df_new[i,texts])))
+}
+
+print(nrow(df_new[df_new[ , as.numeric(n_sent) < 3]])/nrow(df_new))
+  
+short_pars = df_new[df_new[ , as.numeric(n_sent) < 3]]

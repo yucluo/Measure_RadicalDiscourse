@@ -394,7 +394,7 @@ metaALL &lt;- ldply( .data = list.files(pattern=&quot;*.csv&quot;),
 <pre class="r"><code>metaALL$Date = as.POSIXct(metaALL$Date)
 
 # this is our dataset 
-setwd(&quot;/Users/yuchenluo/Desktop/Measure_RadicalDiscourse&quot;)
+setwd(&quot;/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/meta&quot;)
 meta &lt;- ldply( .data = list.files(pattern=&quot;*.csv&quot;),
                           .fun = readFun,
                           .parallel = TRUE ) </code></pre>
@@ -426,7 +426,6 @@ print(nrow(sub2))</code></pre>
 <div id="word-counts" class="section level1">
 <h1>Word Counts</h1>
 <pre class="r"><code>setwd(&quot;/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/&quot;)
-
 
 
 folders = list.files(full.names = F , recursive = F, pattern='speeches*')
@@ -483,7 +482,11 @@ sd = sapply(wd_ct, sd))
 <li>Query functions: there are three main types</li>
 <li>least confidence: the easiest way. The learner selects the instance for which it has the least confidence i.e. the probability of the most probable label.</li>
 <li>margin sampling: selecting the instance that has the smallest difference between the first and second most probable labels.</li>
-<li>Entropy Sampling: entropy utilizes all the possible label probabilities, and roughly measures the uncertainty of a model. If a model is highly certain about a class for a given data point, it will probably have a high certainty for a particular class, whereas all the other classes will have low probability. The entropy formula is applied to each instance and the instance with the largest value is queried. (This is the method that Yaoyao and Alex used. They used a built-in uncertainty measure in modAL, a Python3 library) Here are some instructions on how to use this python library [<a href="https://github.com/modAL-python/modAL" class="uri">https://github.com/modAL-python/modAL</a>]</li>
+<li><p>Entropy Sampling: entropy utilizes all the possible label probabilities, and roughly measures the uncertainty of a model. If a model is highly certain about a class for a given data point, it will probably have a high certainty for a particular class, whereas all the other classes will have low probability. The entropy formula is applied to each instance and the instance with the largest value is queried. (This is the method that Yaoyao and Alex used. They used a built-in uncertainty measure in modAL, a Python3 library) Here are some instructions on how to use this python library [<a href="https://github.com/modAL-python/modAL" class="uri">https://github.com/modAL-python/modAL</a>]</p></li>
+<li>Literature on Active Learning
+<ul>
+<li>I found one paper written by not computer scientists (by polisci researchers at LSE, NYU and Michigan) [<a href="http://www-personal.umich.edu/~wmebane/Paper_Active_Learning_Approaches_for_Labeling_Text.pdf" class="uri">http://www-personal.umich.edu/~wmebane/Paper_Active_Learning_Approaches_for_Labeling_Text.pdf</a>]. This paper is aimed at introducing active learning to the field and did a couple of tests on various corpora to prove the supriority of this method compared with random sampling (passive learning).</li>
+</ul></li>
 </ul>
 </div>
 
