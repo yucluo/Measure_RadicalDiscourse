@@ -1,0 +1,49 @@
+---
+title: "dimension"
+author: "Yuchen"
+date: "12/18/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("ggplot2")
+
+```
+
+## 
+
+```{r load data}
+pretrain<-read.csv(file="pretrained_embeddings.csv", header=TRUE,row.names=1, sep=",")
+
+train5 = read.csv(file="train_5_embeddings.csv", header=TRUE,row.names=1, sep=",")
+
+train10 = read.csv(file="train_10_embeddings.csv", header=TRUE,row.names=1, sep=",")
+```
+
+## 
+
+```{r functions, echo=FALSE}
+#####DEFINE FUNCTIONS##########
+#Calculate norm of vector#
+norm_vec <- function(x) sqrt(sum(x^2))
+
+#Dot product#
+dot <- function(x,y) (sum(x*y))
+
+#Cosine Similarity#
+cos <- function(x,y) dot(x,y)/norm_vec(x)/norm_vec(y)
+
+#Normalize vector#
+nrm <- function(x) x/norm_vec(x)
+
+#Calculate semantic dimension from antonym pair#
+dimension<-function(x,y) nrm(nrm(x)-nrm(y))
+```
+
+
+```{r store and normalize}
+cdfm<-as.matrix(data.frame(pretrain))
+cdfmn<-t(apply(cdfm,1,nrm))
+
+```

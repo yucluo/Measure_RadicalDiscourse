@@ -1,0 +1,1032 @@
+---
+title: "descriptives"
+author: "Yuchen"
+date: "2/14/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+```
+
+## Inclusion on Nationalist Boundaries
+
+```{r inclusion}
+
+# load prediction data and the to-predict data, which contains the metadata
+all_data = read.csv('20201115_all_paragraphs.csv')
+all_data$speech_par_id = paste(all_data$Speech_id, all_data$par_id, sep = '_')
+
+# write a function to generate by paragraph prevalence 
+par_level_prevalence = function(file){
+dat = read.csv(file)
+
+# merge those two
+dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party, text), by = "speech_par_id")
+
+# use 0.5 as cutoff
+dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+# drop bush 2000
+dat = dat[dat$term != 2000 | dat$party != "rep", ]
+
+# generate frequency percentage
+counts_overall = dat %>% 
+  group_by(term, party) %>%
+  summarise(total = n())
+            
+counts_by_party = dat %>% 
+  group_by(term, party, predicted) %>%
+  summarise(counts = n())
+
+merged_counts_dat = merge(counts_by_party, counts_overall, by = c("term", "party"))
+
+setDT(merged_counts_dat)
+merged_counts_dat = merged_counts_dat[, perc := counts/total]
+
+merged_counts_dat= merged_counts_dat[, minus_perc := 1 - perc] # get the 1- perc and then filter by pred ==0
+
+return(merged_counts_dat)
+}
+
+
+
+merged_counts_inclusion %>%
+  filter(predicted == 0) %>% add_row(term = 1964, party = "rep", predicted = 0, perc = 0) %>% add_row(term = 2000, party = "rep", predicted = 0, perc = 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Inclusive Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+
+# Aggregate across two parties
+across_party_prevalence = function(file){
+dat = read.csv(file)
+
+# merge those two
+dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party, text), by = "speech_par_id")
+
+# use 0.5 as cutoff
+dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+# drop bush 2000
+dat = dat[dat$term != 2000 | dat$party != "rep", ]
+
+counts_agg = dat %>% 
+  group_by(term) %>%
+  summarise(total = n())
+            
+counts_label_agg = dat %>% 
+  group_by(term,predicted) %>%
+  summarise(counts = n())
+
+merged_counts_agg = merge(counts_agg, counts_label_agg, by = "term")
+
+setDT(merged_counts_agg)
+merged_counts_agg= merged_counts_agg[, perc := counts/total]
+merged_counts_agg= merged_counts_agg[, minus_perc := 1 - perc] # get the 1- perc and then filter by pred ==0
+
+return(merged_counts_agg)
+}
+
+merged_counts_agg %>%
+  filter(predicted == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Inclusive Paragraphs out of All Paragraphs in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+
+### Aggregate to Speech level ---------------------
+
+# aggregate paragraph labels into speech level label
+setDT(inclusion_meta)
+speech_level_df = NULL
+for (i in unique(inclusion_meta$Speech_id)){
+  df = inclusion_meta[Speech_id == i, ] #isolate each speech
+  df$speech_pred = ifelse(sum(df$predicted) >0, 1, 0) # create speech label for each line
+  speech_level_df = rbind(speech_level_df, df)
+}
+ speech_labels = speech_level_df %>% select(Speech_id, term, party, speech_pred)
+# drop duplicates
+speech_labels = speech_labels[!duplicated(speech_labels)]
+
+# speech level plot
+# generate frequency percentage
+counts_overall = speech_labels %>%
+  group_by(term, party) %>%
+  summarise(total = n())
+
+counts_by_party = speech_labels %>%
+  group_by(term, party, speech_pred) %>%
+  summarise(counts = n())
+
+merged_counts = merge(counts_by_party, counts_overall, by = c("term", "party"))
+setDT(merged_counts)
+merged_counts[, perc := counts/total]
+
+
+merged_counts %>%
+  filter(speech_pred == 1) %>% add_row(term = 1964, party = "rep", speech_pred = 1, perc = 0) %>% add_row(term = 2000, party = "rep", speech_pred = 1, perc = 0)%>%
+ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Inclusive Speeches out of All Speeches of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties speech level
+speech_level_across_parties_pravalence = function(file){
+    dat = read.csv(file)
+    dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party, text), by = "speech_par_id")
+    # use 0.5 as cutoff
+    dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+    # drop bush 2000
+    dat = dat[dat$term != 2000 | dat$party != "rep", ]
+    # aggregate paragraph labels into speech level label
+    setDT(dat)
+    speech_level_df = NULL
+    for (i in unique(dat$Speech_id)){
+      df = dat[Speech_id == i, ] #isolate each speech
+      df$speech_pred = ifelse(sum(df$predicted) >0, 1, 0) # create speech label for each line
+      speech_level_df = rbind(speech_level_df, df)
+    }
+     speech_labels = speech_level_df %>% select(Speech_id, term, party, speech_pred)
+    # drop duplicates
+    speech_labels = speech_labels[!duplicated(speech_labels)]
+  
+    counts_agg = speech_labels %>% 
+    group_by(term) %>%
+    summarise(total = n())
+              
+    counts_label_agg = speech_labels %>% 
+      group_by(term,speech_pred) %>%
+      summarise(counts = n())
+    
+    merged_counts_agg = merge(counts_agg, counts_label_agg, by = "term")
+    
+    setDT(merged_counts_agg)
+    merged_counts_agg= merged_counts_agg[, perc := counts/total]
+    merged_counts_agg= merged_counts_agg[, minus_perc := 1 - perc] 
+    # get the 1- perc and then filter by pred ==0
+
+return(merged_counts_agg)
+}
+
+inclusion_speech_level_aagg = speech_level_across_parties_pravalence("Iteration_3_predictions_inclusion.csv")
+  
+inclusion_speech_level_aagg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Inclusive Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+```
+## Exclusion
+
+```{r exclusion}
+
+# load prediction data and the to-predict data, which contains the metadata
+exclusion = read.csv("Iteration_3_predictions_exclusion.csv")
+
+# merge those two
+exclusion = left_join(exclusion, all_data %>% select(speech_par_id, term, party, text), by = "speech_par_id")
+
+# check to see if the merge is correct
+nrow(exclusion[exclusion$text.x == exclusion$text.y, ])
+
+# keep only relavant columns
+exclusion_meta = exclusion %>% select(Predictions_prob_1, Predictions_prob_0, speech_par_id, term, party)
+
+# use 0.5 as cutoff
+exclusion_meta$predicted = ifelse(exclusion_meta$Predictions_prob_1 > exclusion$Predictions_prob_0, 1, 0)
+
+# check the distribution
+table(exclusion_meta$predicted)
+# 
+
+# generate frequency percentage
+counts_overall = exclusion_meta %>% 
+  group_by(term, party) %>%
+  summarise(total = n())
+            
+counts_by_party = exclusion_meta %>% 
+  group_by(term, party, predicted) %>%
+  summarise(counts = n())
+
+merged_counts = merge(counts_by_party, counts_overall, by = c("term", "party"))
+
+setDT(merged_counts)
+merged_counts = merged_counts[, perc := counts/total]
+
+merged_counts_exclusion = merged_counts %>%
+  mutate(perc = counts/total) %>%
+  select(term, party, predicted, perc) 
+
+merged_counts_exclusion[perc == 1, predicted := 1 ]
+merged_counts_exclusion[perc == 1, perc := 0 ]
+
+
+merged_counts_exclusion %>%
+  filter(predicted == 1) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, perc = 0) %>%
+ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Exclusive Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+
+merged_counts_exclusion %>%
+  filter(predicted == 1) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, perc = 0) %>%
+ggplot(aes(x = factor(term), y = perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Exclusive Paragraphs out of All Paragraphs in Each Election Year") + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties speech level
+exclusion_speech_level_agg = speech_level_across_parties_pravalence("Iteration_3_predictions_exclusion.csv")
+  
+exclusion_speech_level_agg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Exclusionary Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+```
+
+## Populism
+
+```{r populism}
+
+# load prediction data 
+pop = read.csv("Iteration_3_predictions_populism.csv")
+
+# merge those two
+pop = left_join(pop, all_data %>% select(speech_par_id, Speech_id, term, party, text), by = "speech_par_id")
+
+# check to see if the merge is correct
+nrow(pop[pop$text.x == pop$text.y, ])
+
+# keep only relavant columns
+pop_meta = pop %>% select(Predictions_prob_1, Predictions_prob_0, speech_par_id, Speech_id, term, party)
+
+# use 0.5 as cutoff
+pop_meta$predicted = ifelse(pop_meta$Predictions_prob_1 > pop_meta$Predictions_prob_0, 1, 0)
+
+  # # aggregate paragraph labels into speech level label
+  # setDT(pop_meta)
+  # speech_level_df = NULL
+  # for (i in unique(pop_meta$Speech_id)){
+  #   df = pop_meta[Speech_id == i, ] #isolate each speech
+  #   df$speech_pred = ifelse(sum(df$predicted) >0, 1, 0) # create speech label for each line
+  #   speech_level_df = rbind(speech_level_df, df)
+  # }
+  # speech_labels = speech_level_df %>% select(Speech_id, term, party, speech_pred)
+  # # drop duplicates
+  # speech_labels = speech_labels[!duplicated(speech_labels)]
+
+# check the distribution
+table(pop_meta$predicted)
+
+# generate frequency percentage
+counts_overall = pop_meta %>% 
+  group_by(term, party) %>%
+  summarise(total = n())
+            
+counts_by_party = pop_meta %>% 
+  group_by(term, party, predicted) %>%
+  summarise(counts = n())
+
+merged_counts = merge(counts_by_party, counts_overall, by = c("term", "party"))
+
+setDT(merged_counts)
+merged_counts = merged_counts[, perc := counts/total]
+
+merged_counts_populism = merged_counts %>%
+  mutate(perc = counts/total) %>%
+  select(term, party, predicted, perc) 
+
+merged_counts_populism[perc == 1, predicted := 1 ]
+merged_counts_populism[perc == 1, perc := 0 ]
+
+
+merged_counts_populism %>%
+  filter(predicted == 1) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, perc = 0) %>%
+ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Populist Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+  # # -------
+  # # speech level plot
+  # # generate frequency percentage
+  # counts_overall = speech_labels %>% 
+  #   group_by(term, party) %>%
+  #   summarise(total = n())
+  #             
+  # counts_by_party = speech_labels %>% 
+  #   group_by(term, party, speech_pred) %>%
+  #   summarise(counts = n())
+  # 
+  # merged_counts = merge(counts_by_party, counts_overall, by = c("term", "party"))
+  # 
+  # merged_counts %>%
+  #   mutate(perc = counts/total) %>%
+  #   filter(speech_pred == 1) %>% 
+  # ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  #   geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Populist Speeches out of All Speeches of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+#plot across parties speech level
+populism_speech_level_agg = speech_level_across_parties_pravalence("Iteration_3_predictions_populism.csv")
+  
+populism_speech_level_agg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Populist Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+```
+```{r auth}
+# load prediction data and the to-predict data, which contains the metadata
+
+# plot by party par level
+merged_counts_auth = par_level_prevalence("Iteration_3_predictions_auth.csv")
+merged_counts_auth%>%
+  filter(predicted == 0) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, minus_perc = 0) %>%
+      add_row(term = 2000, party = "rep", predicted = 1, minus_perc = 0)%>%
+ggplot(aes(x = factor(term), y = minus_perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Authoritarian Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties
+auth_across_parties = across_party_prevalence("Iteration_3_predictions_auth.csv")
+
+auth_across_parties %>%
+  filter(predicted == 1) %>%
+ggplot(aes(x = factor(term), y = perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Authoritarian Paragraphs out of All Paragraphs in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+# plot by speech level
+auth_speech_level = speech_level_pravalence("Iteration_3_predictions_auth.csv")
+
+auth_speech_level %>%
+add_row(term = 1964, party = "rep", pos_perc = 0) %>% add_row(term = 2000, party = "rep", pos_perc = 0)%>%
+ggplot(aes(x = factor(term), y = pos_perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Authoritarian Speeches out of All Speeches of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties speech level
+auth_speech_level_agg = speech_level_across_parties_pravalence("Iteration_3_predictions_auth.csv")
+  
+auth_speech_level_agg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Authoritarian Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+```
+```{r low pride}
+merged_counts_low_pride = par_level_prevalence("Iteration_3_predictions_low_pride.csv")
+
+# plot by party par level
+merged_counts_low_pride %>%
+  filter(predicted == 1) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, perc = 0) %>%
+    add_row(term = 2000, party = "rep", predicted = 1, perc = 0)%>%
+ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Low Pride Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+
+#plot by party speech level
+low_pride_speech_level = speech_level_pravalence("Iteration_3_predictions_low_pride.csv")
+
+low_pride_speech_level %>%
+add_row(term = 1964, party = "rep", pos_perc = 0) %>% add_row(term = 2000, party = "rep", pos_perc = 0)%>%
+ggplot(aes(x = factor(term), y = pos_perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Low Pride Speeches out of All Speeches of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties
+low_pride_across_parties = across_party_prevalence("Iteration_3_predictions_low_pride.csv")
+
+low_pride_across_parties %>%
+  filter(predicted == 1) %>%
+ggplot(aes(x = factor(term), y = perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Low Pride Paragraphs out of All Paragraphs in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties speech level
+low_pride_speech_level_agg = speech_level_across_parties_pravalence("Iteration_3_predictions_low_pride.csv")
+  
+low_pride_speech_level_agg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of Low Pride Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+```
+
+
+```{r high pride}
+# plot by party par level
+merged_counts_high_pride = par_level_prevalence("Iteration_3_predictions_high_pride.csv")
+
+merged_counts_high_pride %>%
+  filter(predicted == 1) %>%
+  add_row(term = 1964, party = "rep", predicted = 1, perc = 0) %>%
+  add_row(term = 2000, party = "rep", predicted = 1, perc = 0)%>%
+ggplot(aes(x = factor(term), y = perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of High Pride Paragraphs out of All Paragraphs of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+# plot by speech level
+ = speech_level_pravalence("Iteration_3_predictions_high_pride.csv")
+
+high_pride_speech_level %>%
+add_row(term = 1964, party = "rep", pos_perc = 0) %>% add_row(term = 2000, party = "rep", pos_perc = 0)%>%
+ggplot(aes(x = factor(term), y = pos_perc, fill = party)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of High Pride Speeches out of All Speeches of the Same Campaign") + scale_fill_manual(values = c(dem = "#4E84C4", rep = "dark red")) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties par level
+high_pride_across_parties = across_party_prevalence("Iteration_3_predictions_high_pride.csv")
+
+high_pride_across_parties %>%
+  filter(predicted == 1) %>%
+ggplot(aes(x = factor(term), y = perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of High Pride Paragraphs out of All Paragraphs in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+#plot across parties speech level
+high_pride_speech_level_agg = speech_level_across_parties_pravalence("Iteration_3_predictions_high_pride.csv")
+  
+high_pride_speech_level_agg %>%
+  filter(speech_pred == 0) %>% 
+ggplot(aes(x = factor(term), y = minus_perc)) +
+  geom_bar(stat = "identity", position=position_dodge()) + ggtitle("Percentage of High Pride Speeches out of All Speeches in Each Election Year")  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab("Term") + ylab("Percentage")
+
+```
+
+
+```{r correlation}
+
+prevalence = data.frame(term = merged_counts_populism[predicted == 1, term],
+                        party = merged_counts_populism[predicted == 1, party],
+                        populism = merged_counts_populism[predicted == 1, perc],
+                        inclusion =  merged_counts_inclusion[predicted == 1, perc], 
+                        exclusion =merged_counts_exclusion[predicted == 1, perc], 
+                        low_pride = merged_counts_low_pride[predicted == 1, perc], 
+                        high_pride = merged_counts_high_pride[predicted == 1, perc], 
+                        auth = merged_counts_auth[predicted == 1, perc])
+
+# correlation for both parties
+prevalence_agg_year = prevalence %>% group_by(term)%>% summarise(populism = sum(populism), inclusion = sum(inclusion), exclusion = sum(exclusion), low_pride = sum(low_pride), high_pride = sum(high_pride), auth = sum(auth) )
+
+# by year
+correlation_by_year = cor(prevalence_agg_year %>% select(populism, inclusion, exclusion, low_pride, high_pride, auth))
+
+write.csv(correlation_by_year, "corr_both_parties.csv")
+
+# correlation for parties separately 
+
+library(reshape2)
+
+prevalance_disagg = cbind(dcast(prevalence, term ~ party, value.var = "populism"), 
+                          dcast(prevalence, term ~ party, value.var ="inclusion")[, 2:3],
+                          dcast(prevalence, term ~ party, value.var ="exclusion")[, 2:3],
+                          dcast(prevalence, term ~ party, value.var ="low_pride")[, 2:3],
+                          dcast(prevalence, term ~ party, value.var ="high_pride")[, 2:3],
+                          dcast(prevalence, term ~ party, value.var ="auth")[, 2:3])
+
+colnames(prevalance_disagg) = c("term","populism_dem", "populism_rep", "inclusion_dem", "inclusion_rep", "exclusion_dem", "exclusion_rep", "low_pride_dem", "low_pride_rep", "high_pride_dem", "high_pride_rep", "auth_dem", "auth_rep")
+
+# by party and by year
+correlation_disagg = cor(prevalance_disagg[, 2:13], use = "pairwise.complete.obs")
+
+write.csv(correlation_disagg, "corr_parties_disaggregated.csv")
+
+write.csv(prevalence, "prevalance_both_parties.csv")
+
+write.csv(prevalance_disagg, "prevalance_by_term_party.csv")
+
+## in campaign 
+correlation_in_campaign = cor(prevalence[,3:8])
+write.csv(correlation_in_campaign, "corr_in_campaign.csv")
+
+### speech level -----------
+
+# write a function to get speech level pravalence
+speech_level_pravalence = function(file){
+dat = read.csv(file)
+dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party, text), by = "speech_par_id")
+# use 0.5 as cutoff
+dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+# drop bush 2000
+dat = dat[dat$term != 2000 | dat$party != "rep", ]
+# aggregate paragraph labels into speech level label
+setDT(dat)
+speech_level_df = NULL
+for (i in unique(dat$Speech_id)){
+  df = dat[Speech_id == i, ] #isolate each speech
+  df$speech_pred = ifelse(sum(df$predicted) >0, 1, 0) # create speech label for each line
+  speech_level_df = rbind(speech_level_df, df)
+}
+ speech_labels = speech_level_df %>% select(Speech_id, term, party, speech_pred)
+# drop duplicates
+speech_labels = speech_labels[!duplicated(speech_labels)]
+
+# speech level plot
+# generate frequency percentage
+counts_overall = speech_labels %>%
+  group_by(term, party) %>%
+  summarise(total = n())
+
+counts_by_party = speech_labels %>%
+  group_by(term, party, speech_pred) %>%
+  summarise(counts = n())
+
+merged_counts = merge(counts_by_party, counts_overall, by = c("term", "party"))
+setDT(merged_counts)
+merged_counts[, perc := counts/total]
+merged_counts[, pos_perc := ifelse(speech_pred == 1, perc, 1- perc)]
+# drop duplicates
+merged_counts = merged_counts[!duplicated(merged_counts[ , c("term","party")]),]
+
+
+return(merged_counts %>% select(term, party, pos_perc))
+}
+
+inclusion_speech_level = speech_level_pravalence("Iteration_3_predictions_inclusion.csv")
+exclusion_speech_level = speech_level_pravalence("Iteration_3_predictions_exclusion.csv")
+low_pride_speech_level = speech_level_pravalence("Iteration_2_predictions_low_pride.csv")
+high_pride_speech_level = speech_level_pravalence("Iteration_2_predictions_high_pride.csv")
+auth_speech_level = speech_level_pravalence("Iteration_2_predictions_auth.csv")
+populism_speech_level = speech_level_pravalence("Iteration_3_predictions_populism.csv")
+
+prevalence_speech_level= data.frame(term = inclusion_speech_level$term,
+                                    party = inclusion_speech_level$party, 
+                                    populism = populism_speech_level$pos_perc,
+                                    inclusion = inclusion_speech_level$pos_perc,                  
+                                    exclusion = exclusion_speech_level$pos_perc, 
+                                    low_pride = low_pride_speech_level$pos_perc, 
+                                    high_pride = high_pride_speech_level$pos_perc,
+                                    auth = auth_speech_level$pos_perc
+                                   )
+
+cor_speech_level = cor(prevalence_speech_level[, 3:8])
+write.csv(cor_speech_level, "speech_level_in_campaign_corr.csv")
+
+# correlation for both parties
+prevalence_agg_year_speech = prevalence_speech_level %>% group_by(term)%>% summarise(populism = sum(populism), inclusion = sum(inclusion), exclusion = sum(exclusion), low_pride = sum(low_pride), high_pride = sum(high_pride), auth = sum(auth) )
+
+# by year
+correlation_by_year_speech = cor(prevalence_agg_year_speech %>% select(populism, inclusion, exclusion, low_pride, high_pride, auth))
+
+write.csv(correlation_by_year_speech, "speech_level_both_parties_corr.csv")
+
+# by year and party
+prevalance_disagg_speech = cbind(dcast(prevalence_speech_level, term ~ party, value.var = "populism"), 
+                          dcast(prevalence_speech_level, term ~ party, value.var ="inclusion")[, 2:3],
+                          dcast(prevalence_speech_level, term ~ party, value.var ="exclusion")[, 2:3],
+                          dcast(prevalence_speech_level, term ~ party, value.var ="low_pride")[, 2:3],
+                          dcast(prevalence_speech_level, term ~ party, value.var ="high_pride")[, 2:3],
+                          dcast(prevalence_speech_level, term ~ party, value.var ="auth")[, 2:3])
+
+colnames(prevalance_disagg_speech) = c("term","populism_dem", "populism_rep", "inclusion_dem", "inclusion_rep", "exclusion_dem", "exclusion_rep", "low_pride_dem", "low_pride_rep", "high_pride_dem", "high_pride_rep", "auth_dem", "auth_rep")
+
+correlation_disagg_speech = cor(prevalance_disagg_speech[, 2:13], use = "pairwise.complete.obs")
+
+write.csv(correlation_disagg_speech, "speech_level_corr_party_disaggregated.csv")
+write.csv(prevalence_speech_level, "prvalence_speech_level.csv")
+```
+
+```{r gdp and unemployment}
+# mean economic performance of 6 months before the election
+library(lubridate)
+gdp = read.csv("A191RL1Q225SBEA.csv")
+# gdp$DATE = as.Date(format(as.POSIXct(gdp$DATE), "%Y-%m"), "%y-%m")
+gdp$DATE = as.POSIXct(gdp$DATE)
+
+
+# keep only 6 months before the election
+incumbency_dat = read.csv("regression_df.csv")
+gdp = gdp[ year(gdp$DATE) %in% incumbency_dat$year,  ]
+gdp = gdp[month(gdp$DATE) > 4 & month(gdp$DATE) < 11, ]
+
+pre_election_gdp = gdp %>% group_by(year(DATE)) %>% summarise(pre_election_gdp = mean(A191RL1Q225SBEA))
+colnames(pre_election_gdp)[1] = "year"
+
+# add the gdp data to the main dat
+incumbency_dat = left_join(incumbency_dat, pre_election_gdp, by = "year")
+
+# UNEMPLOYMENT
+unemployment = read.csv("UNRATE.csv")
+unemployment$DATE = as.Date(unemployment$DATE)
+unemployment = unemployment[year(unemployment$DATE) %in% incumbency_dat$year,  ]
+unemployment = unemployment[month(unemployment$DATE) > 4 & month(unemployment$DATE) < 11,  ]
+
+pre_election_unemployment = unemployment %>% group_by(year(DATE)) %>% summarise(pre_election_unemployment = mean(UNRATE))
+colnames(pre_election_unemployment)[1] = "year"
+
+# add the unemployment data to the main dat
+incumbency_dat = left_join(incumbency_dat, pre_election_unemployment, by = "year")
+
+incumbency_dat[incumbency_dat$party == "rep", "party"] = "republican"
+incumbency_dat[incumbency_dat$party == "dem", "party"] = "democrat"
+
+write.csv(incumbency_dat, "regression_df.csv")
+
+
+```
+
+
+```{r get speech level prediction}
+speech_level_prediction = function(file){
+dat = read.csv(file)
+dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party), by = "speech_par_id")
+# use 0.5 as cutoff
+dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+# drop bush 2000
+dat = dat[dat$term != 2000 | dat$party != "rep", ]
+# aggregate paragraph labels into speech level label
+setDT(dat)
+speech_level_df = NULL
+for (i in unique(dat$Speech_id)){
+  df = dat[Speech_id == i, ] #isolate each speech
+  df$speech_pred = ifelse(sum(df$predicted) >0, 1, 0) # create speech label for each line
+  speech_level_df = rbind(speech_level_df, df)
+}
+speech_level_df$wordcount = sapply(strsplit(as.character(speech_level_df$text), " "), length)
+word_count = speech_level_df %>% group_by(Speech_id) %>% summarise(wordcount = sum(wordcount))
+speech_labels = speech_level_df %>% select(Speech_id, term, party,speech_pred)
+
+# drop duplicates
+speech_labels = speech_labels[!duplicated(speech_labels)]
+speech_labels = left_join(speech_labels, word_count, by = "Speech_id")
+return(speech_labels)
+}
+
+pop_speech_label = speech_level_prediction("Iteration_3_predictions_populism.csv")
+pop_speech_label[pop_speech_label$party == "rep", "party"] = "republican"
+pop_speech_label[pop_speech_label$party == "dem", "party"] = "democrat"
+
+auth_speech_label = speech_level_prediction("Iteration_3_predictions_auth.csv")
+auth_speech_label[auth_speech_label$party == "rep", "party"] = "republican"
+auth_speech_label[auth_speech_label$party == "dem", "party"] = "democrat"
+
+low_pride_speech_label = speech_level_prediction("Iteration_3_predictions_low_pride.csv")
+low_pride_speech_label[low_pride_speech_label$party == "rep", "party"] = "republican"
+low_pride_speech_label[low_pride_speech_label$party == "dem", "party"] = "democrat"
+
+pop_speech_label = merge(pop_speech_label, incumbency_dat, by = c('term', 'party'))
+auth_speech_label = merge(auth_speech_label, incumbency_dat, by = c('term', 'party'))
+low_pride_speech_label = merge(low_pride_speech_label, incumbency_dat,by = c('term', 'party') )
+pop_speech_label$campaign = paste(pop_speech_label$term, pop_speech_label$party)
+low_pride_speech_label$campaign = paste(low_pride_speech_label$term, low_pride_speech_label$party)
+auth_speech_label$campaign = paste(auth_speech_label$term, auth_speech_label$party)
+
+
+```
+
+
+```{r regressions}
+library(rms)
+pop_reg_1=lrm(speech_pred ~ recession + wordcount, data = pop_speech_label, x=T, y=T)
+pop_reg_1 = robcov(pop_reg_1, cluster=pop_speech_label$campaign)
+
+pop_reg_2=lrm(speech_pred ~ party_incumbent + wordcount, data = pop_speech_label, x=T, y=T)
+pop_reg_2 = robcov(pop_reg_2, cluster=pop_speech_label$campaign)
+
+pop_reg_3=lrm(speech_pred ~ recession*party_incumbent + wordcount, data = pop_speech_label, x=T, y=T)
+pop_reg_3 = robcov(pop_reg_3, cluster=pop_speech_label$campaign)
+
+low_pride_reg_1=lrm(speech_pred ~ recession + wordcount, data = low_pride_speech_label, x=T, y=T)
+low_pride_reg_1 = robcov(low_pride_reg_1, cluster=low_pride_speech_label$campaign)
+
+low_pride_reg_2=lrm(speech_pred ~ party_incumbent + wordcount, data = low_pride_speech_label, x=T, y=T)
+low_pride_reg_2 = robcov(low_pride_reg_2, cluster=low_pride_speech_label$campaign)
+
+low_pride_reg_3=lrm(speech_pred ~ recession*party_incumbent + wordcount, data = low_pride_speech_label, x=T, y=T)
+low_pride_reg_3 = robcov(low_pride_reg_3, cluster=low_pride_speech_label$campaign)
+
+auth_reg_1=lrm(speech_pred ~ recession + wordcount, data = auth_speech_label, x=T, y=T)
+auth_reg_1 = robcov(auth_reg_1, cluster=auth_speech_label$campaign)
+
+auth_reg_2=lrm(speech_pred ~ party_incumbent + wordcount, data = auth_speech_label, x=T, y=T)
+auth_reg_2 = robcov(auth_reg_2, cluster=auth_speech_label$campaign)
+
+auth_reg_3=lrm(speech_pred ~ recession*party_incumbent + wordcount, data = auth_speech_label, x=T, y=T)
+auth_reg_3 = robcov(auth_reg_3, cluster=auth_speech_label$campaign)
+
+
+library(stargazer)
+stargazer(pop_reg_1, pop_reg_2, pop_reg_3, type = "text", title = "Logistic Regression for Populism")
+stargazer(low_pride_reg_1, low_pride_reg_2, low_pride_reg_3, type = "text", title = "Logistic Regression for Low Pride")
+stargazer(auth_reg_1, auth_reg_2, auth_reg_3, type = "text", title = "Logistic Regression for Authoratarianism")
+
+
+# auth_reg = lm(auth ~ party + year + party_incumbent + prior_vp + prior_president + prior_congress + prior_governor + recession + pre_election_gdp + pre_election_unemployment, data = regression_df)
+# 
+# inclusion_reg = lm(inclusion ~ party + year + party_incumbent + prior_vp + prior_president + prior_congress + prior_governor + recession + pre_election_gdp + pre_election_unemployment, data = regression_df)
+# 
+# exclusion_reg = lm(exclusion ~ party + year + party_incumbent + prior_vp + prior_president + prior_congress + prior_governor + recession + pre_election_gdp + pre_election_unemployment, data = regression_df)
+```
+
+
+```{r make table}
+library(kableExtra)
+
+prop_in_speech = function(file){
+  dat = read.csv(file)
+  dat = left_join(dat, all_data %>% select(speech_par_id,Speech_id, term, party, text), by = "speech_par_id")
+  # use 0.5 as cutoff
+  dat$predicted = ifelse(dat$Predictions_prob_1 > dat$Predictions_prob_0, 1, 0)
+  # drop bush 2000
+  dat = dat[dat$term != 2000 | dat$party != "rep", ]
+  # aggregate paragraph labels into speech level label
+  setDT(dat)
+  speech_level_df = NULL
+  for (i in unique(dat$Speech_id)){
+    df = dat[Speech_id == i, ] #isolate each speech
+    df$speech_prop = sum(df$predicted)/nrow(df)
+    speech_level_df = rbind(speech_level_df, df)
+  }
+  
+  speech_labels = speech_level_df %>% select(Speech_id, term, party,speech_prop)
+  
+  # drop duplicates
+  speech_labels = speech_labels[!duplicated(speech_labels)]
+  return(speech_labels)
+}
+
+pop_in_speech = prop_in_speech("Iteration_3_predictions_populism.csv")
+inclusion_in_speech = prop_in_speech("Iteration_3_predictions_inclusion.csv")
+exclusion_in_speech = prop_in_speech("Iteration_3_predictions_exclusion.csv")
+low_pride_in_speech = prop_in_speech("Iteration_3_predictions_low_pride.csv")
+high_pride_in_speech = prop_in_speech("Iteration_3_predictions_high_pride.csv")
+auth_in_speech = prop_in_speech("Iteration_3_predictions_auth.csv")
+
+regression_df = read.csv("regression_df.csv")
+# prevalence = prevalence %>% filter(term != 2000 | party != "rep")
+# descriptives = cbind(prevalence[, 3:8], regression_df %>% select(recession, prior_president, party_incumbent))
+
+prevalance_in_speech = data.frame(populism = pop_in_speech$speech_prop, inclusion = inclusion_in_speech$speech_prop, exclusion = exclusion_in_speech$speech_prop, low_pride = low_pride_in_speech$speech_prop, high_pride = high_pride_in_speech$speech_prop,auth = auth_in_speech$speech_prop, speech_length = word_count$wordcount)
+
+descriptives1 = data.frame(Mean = colMeans(prevalance_in_speech), sd = apply(prevalance_in_speech, 2, sd), t(apply(prevalance_in_speech, 2, quantile, probs = c(0, 0.25, 0.5, 0.75, 1))))
+
+descriptives2 = regression_df %>% select(recession, prior_president, party_incumbent)
+descriptives2 = data.frame(Mean = colMeans(descriptives2), 
+                           sd = apply(descriptives2, 2, sd), 
+                          t(apply(descriptives2, 2, quantile, probs = c(0, 0.25, 0.5, 0.75, 1)))
+                            )                                                                               
+
+descriptives = rbind(descriptives1, descriptives2)                                                          
+                                                                                                            kable(descriptives, format = "latex", 
+                                                                                                                  col.names = c("Mean", "Sd", "Min", "1st Percentile", "Median", "3rd Percentile", "max"), 
+     row.names = T,
+                                                                                                                  caption = "Summary statistics",
+     align = "c",
+    digits =2                                                                                                  ) 
+                                                                                                            
+```
+row.names = c("populism (share in each speech)", "inclusion (share in each speech)", "exclusion (share in each speech)", "low pride (share in each speech)", "high pride (share in each speech)", "authoratarianism (share in each speech)", "Speech length","recession (binary)", "prior president (binary)", "party incumbent (binary)")
+
+
+```{r corpus descriptives}
+# speech_data = read.csv("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/codes/20210329_all_paragraphs.csv")
+# speech_data[speech_data$Speech_id %in% c(1575, 1494, 1569),	"term"	] = 1960
+# speech_data[speech_data$Speech_id %in% c(1575, 1494, 1569),	"party"] = "dem"
+# speech_data[speech_data$Speech_id ==  2243,	"party"] = "dem"
+# speech_data[speech_data$Speech_id ==  2243,	"term"] = 1972
+
+write.csv(speech_data,"20210401_all_paragraphs.csv")
+speech_data = read.csv("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/codes/20210401_all_paragraphs.csv")
+### Drop Q&A Speeches
+speeches_to_drop = c("2012-09-20-question-and-answer",
+"2004-09-10-discussion-portsmouth-ohio",
+"2004-09-13-care-muskegon-michigan",
+"2004-09-04-broadview-heights-ohio",
+"2004-10-26-richland-center-wisconsin",
+"2004-10-04-discussion-clive-iowa",
+"2004-10-20-discussion-rochester-minnesota",
+"2004-09-24-education-janesville-wisconsin",
+"2004-09-20-derry-new-hampshire",
+"2004-09-17-charlotte-north-carolina",
+"2004-10-02-discussion-mansfield-ohio",
+"2004-09-07-discussion-sedalia-missouri",
+"2004-09-27-education-springfield-ohio",
+"2004-09-16-care-blaine-minnesota",
+"2004-09-22-king-prussia-pennsylvania",
+"2004-10-22-discussion-canton-ohio",
+"2012-09-25-new-york-city",
+"2012-10-10-mount-vernon-ohio",
+"2031",
+"2004-10-22-discussion-canton-ohio",
+"2038",
+"2168",
+"2744",
+"2004-10-20-eau-claire-wisconsin",
+"2005", 
+"2176",
+"2172",
+"2070",
+"1402",
+"2006")
+
+speech_data = speech_data[!speech_data$Speech_id %in% speeches_to_drop, ]
+
+### Get counts and lengths
+library(stringr)
+speech_data$par_length = unlist(lapply(str_split(speech_data$text, " "), length))
+Speech_length = speech_data %>% group_by(Speech_id) %>% summarise(speech_length = sum(par_length))
+par_counts = speech_data %>% group_by(Speech_id) %>% summarise(n_pars = n())
+
+### Combine descriptive variables 
+Speech_descriptives = left_join(par_counts, Speech_length, by = "Speech_id")
+Speech_descriptives = left_join(Speech_descriptives,unique(speech_data %>% select(Speech_id, party, term)))
+
+regression = read.csv("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/codes/regression_df.csv")
+
+Speech_descriptives$party = as.character(Speech_descriptives$party)
+Speech_descriptives$Speech_id = as.character(Speech_descriptives$Speech_id)
+Speech_descriptives[Speech_descriptives$party == "rep", 'party'] = "republican"
+Speech_descriptives[Speech_descriptives$party == "dem", 'party'] = "democrat"
+
+
+Speech_descriptives = left_join(Speech_descriptives, regression %>% select(term, party, party_incumbent, recession), by = c("term", "party"))
+
+# drop Bush 2000
+Speech_descriptives = Speech_descriptives[!(Speech_descriptives$party == "R" & Speech_descriptives$term == 2000), ]
+# add date
+dates = read.csv("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/codes/Speech_Dates_updated.csv")
+dates$id_speech = as.character(dates$id_speech)
+Speech_descriptives = left_join(Speech_descriptives, dates %>% select(id_speech, date), by = c("Speech_id" = "id_speech"))
+setDT(Speech_descriptives)
+Speech_descriptives$date = as.Date(Speech_descriptives$date, format = "%m/%d/%Y")
+# change into character, otherwise the regex won't work for UCSB
+Speech_descriptives$date = as.character(Speech_descriptives$date)
+
+# add for UCSB 
+Speech_descriptives[is.na(Speech_descriptives$date) & nchar(Speech_descriptives$Speech_id)>4, date := substr(Speech_id, 1, 10)] 
+
+# drop later or on election day
+election_day = read.csv("Other_Meta.csv")
+Speech_descriptives = left_join(Speech_descriptives, election_day%>%select(party,term, election_date))
+Speech_descriptives = Speech_descriptives[as.Date(Speech_descriptives$date) < as.Date(Speech_descriptives$election_date), ]
+
+# abbreviate Rep and Dem for table fit
+Speech_descriptives[Speech_descriptives$party == "republican", 'party'] = "R"
+Speech_descriptives[Speech_descriptives$party == "democrat", 'party'] = "D"
+
+# # write.csv(Speech_descriptives, "speech_descriptives.csv")
+# # make a data table
+# table = data.frame(properties = character(), Num.speeches = integer(), mean_par_num = numeric() , mean_speech_length = numeric(), min_date = character(), max_date =character(), stringsAsFactors=FALSE)
+# # row.names(table) = c("Full Sample", "Republican", "Democratic", "Party Incumbent", "Party Challenger")
+# 
+# # make rows
+# table[1,] =  c("Full sample", nrow(Speech_descriptives), mean(Speech_descriptives$n_pars), mean(Speech_descriptives$speech_length), min(Speech_descriptives$date, na.rm = T), max(Speech_descriptives$date, na.rm = T))
+# 
+# party = Speech_descriptives %>% group_by(party) %>% summarise(Num.speeches = n(),mean_par_num = mean(n_pars), mean_speech_length = mean(speech_length),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+# colnames(party)[1] = "properties"
+#   
+# incumbent = Speech_descriptives %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = mean(n_pars), mean_speech_length = mean(speech_length),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+# colnames(incumbent)[1] = "properties"
+# 
+# specific_campaigns = Speech_descriptives %>% group_by(term, party) %>% summarise(Num.speeches = n(),mean_par_num = mean(n_pars), mean_speech_length = mean(speech_length),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) )         
+# # make a campaign column to fit the other rows
+# specific_campaigns$campaign = paste0(specific_campaigns$term, specific_campaigns$party)
+# specific_campaigns = specific_campaigns[,3:8]
+# specific_campaigns= specific_campaigns[, c(6, 1, 2, 3, 4, 5)]
+# colnames(specific_campaigns)[1] = "properties"
+# 
+# 
+# ### Combine rows
+# table = rbind(table, party, incumbent, specific_campaigns)
+# 
+# # delete Bush 2000
+# table = table[-c(6, 31),]
+# 
+# # fill the row names properly
+# table[4:5, "properties"] = c("challenger", "incumbent")
+# # frop year info for each campaign
+# table[7:37, 5:6] = sapply(table[7:37, 5:6],substr, 6,10)
+# 
+# table = t(table)
+# table[2:4,] = sapply(table[2:4, ], as.integer) # round up to save space 
+# 
+# 
+# 
+# # fix the table look
+# colnames(table) = table[1,]
+# table = table[-1, ]
+
+#### ---- Compact Table ---------------------------------------
+# make a data table 3*5 cols and 1 full + 2incumbent + 17yr rows 
+table1 = data.frame(groups = character(),
+  Num.speeches = integer(), avg.par.num = integer(),avg.length = integer(), min.date = as.Date(character()),max.date =as.Date(character()),
+                    Num.speeches.R = integer(),mean.par.num.R = integer(),avg.length.R = integer(),min.date.R = as.Date(character()),max.date.R = as.Date(character()),
+                    Num.speeches.D = integer(), mean.par.num.D = integer(), avg.length.D = integer(),min.date.D = as.Date(character()),max.date.D= as.Date(character()),  
+                    stringsAsFactors=FALSE)
+
+# first row all sample
+Speech_descriptives$date = as.Date(Speech_descriptives$date)
+all_descriptives = Speech_descriptives %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives.R = Speech_descriptives %>% filter(party == "R") %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length =  round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+all_descriptives.D =  Speech_descriptives %>% filter(party == "D") %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length =  round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+table1[nrow(table1)+1, ] = c(groups = "full sample", all_descriptives, all_descriptives.R, all_descriptives.R)
+
+# make incumbency rows (2)
+all_descriptives_incumbent = Speech_descriptives %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives_incumbent.R = Speech_descriptives %>% filter(party == "R") %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) %>% select(-party_incumbent) # drop fisrt column to avoid duplicates
+
+all_descriptives_incumbent.D = Speech_descriptives %>% filter(party == "D") %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) %>% select(-party_incumbent)
+
+table1[2:3, ] = cbind(all_descriptives_incumbent, all_descriptives_incumbent.R, all_descriptives_incumbent.D)
+
+# make year rows (17)
+all_descriptives_year = Speech_descriptives %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives_year.R = Speech_descriptives %>% filter(party == "R") %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) )
+
+all_descriptives_year.D = Speech_descriptives %>% filter(party == "D") %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) )
+
+table1[4:20, ] = left_join(left_join(all_descriptives_year, all_descriptives_year.R, by = "term"), all_descriptives_year.D, by = "term")
+
+table1[2:3, "groups"] = c("challenger", "incumbent")
+# frop year info for each campaign
+table1[, c(5,6,10,11,15,16)] = sapply(table1[, c(5,6,10,11,15,16)], format, "%m/%d")
+##### ------------- KABLE
+library(kableExtra)
+
+kbl(table1, row.names = F, format = "latex", col.names = columns,format.args = list(big.mark = ","),booktabs = T) %>%
+  kable_minimal() %>%
+  add_header_above(c(" " = 1, "Both Parties" = 5, "Republican" = 5, "Democrat" = 5))
+
+
+############### ANALYSIS SAMPLE  ---------------------------
+Speech_descriptives$month_day = format(as.Date(Speech_descriptives$date), "%m-%d")
+nomination_date = Speech_descriptives %>% group_by(term, party) %>% summarise(min = min(date))
+Speech_descriptives_analysis = Speech_descriptives[Speech_descriptives$month_day > "08-31" | Speech_descriptives$date %in% nomination_date$min ]
+
+# drop later or on election day
+election_day = read.csv("Other_Meta.csv")
+Speech_descriptives_analysis = left_join(Speech_descriptives_analysis, election_day%>%select(party,term, election_date))
+Speech_descriptives_analysis = Speech_descriptives_analysis[as.Date(Speech_descriptives_analysis$date) < as.Date(Speech_descriptives_analysis$election_date), ]
+
+# abbreviate Rep and Dem for table fit
+Speech_descriptives_analysis[Speech_descriptives_analysis$party == "republican", 'party'] = "R"
+Speech_descriptives_analysis[Speech_descriptives_analysis$party == "democrat", 'party'] = "D"
+
+#### ---- Compact Table
+# make a data table 3*5 cols and 1 full + 2incumbent + 17yr rows 
+table2 = data.frame(groups = character(),
+  Num.speeches = integer(), avg.par.num = integer(),avg.length = integer(), min.date = as.Date(character()),max.date =as.Date(character()),
+                    Num.speeches.R = integer(),mean.par.num.R = integer(),avg.length.R = integer(),min.date.R = as.Date(character()),max.date.R = as.Date(character()),
+                    Num.speeches.D = integer(), mean.par.num.D = integer(), avg.length.D = integer(),min.date.D = as.Date(character()),max.date.D= as.Date(character()),  
+                    stringsAsFactors=FALSE)
+
+# first row all sample
+Speech_descriptives_analysis$date = as.Date(Speech_descriptives_analysis$date)
+all_descriptives = Speech_descriptives_analysis %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives.R = Speech_descriptives_analysis %>% filter(party == "R") %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length =  round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+all_descriptives.D =  Speech_descriptives_analysis %>% filter(party == "D") %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length =  round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+table2[nrow(table2)+1, ] = c(groups = "full sample", all_descriptives, all_descriptives.R, all_descriptives.R)
+
+# make incumbency rows (2)
+all_descriptives_incumbent = Speech_descriptives_analysis %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives_incumbent.R = Speech_descriptives_analysis %>% filter(party == "R") %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) %>% select(-party_incumbent) # drop fisrt column to avoid duplicates
+
+all_descriptives_incumbent.D = Speech_descriptives_analysis %>% filter(party == "D") %>% group_by(party_incumbent) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) %>% select(-party_incumbent)
+
+table2[2:3, ] = cbind(all_descriptives_incumbent, all_descriptives_incumbent.R, all_descriptives_incumbent.D)
+
+# make year rows (17)
+all_descriptives_year = Speech_descriptives_analysis %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) ) 
+
+all_descriptives_year.R = Speech_descriptives_analysis %>% filter(party == "R") %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) )
+
+all_descriptives_year.D = Speech_descriptives_analysis %>% filter(party == "D") %>% group_by(term) %>% summarise(Num.speeches = n(),mean_par_num = round(mean(n_pars),0), mean_speech_length = round(mean(speech_length),0),min_date =  min(date, na.rm = T), max_date = max(date, na.rm = T) )
+
+table2[4:20, ] = left_join(left_join(all_descriptives_year, all_descriptives_year.R, by = "term"), all_descriptives_year.D, by = "term")
+
+table2[2:3, "groups"] = c("challenger", "incumbent")
+
+# frop year info for each campaign
+table2[, c(5,6,10,11,15,16)] = sapply(table2[, c(5,6,10,11,15,16)], format, "%m/%d")
+# table2[, c(5,6,10,11,15,16)] = sapply(table2[, c(5,6,10,11,15,16)],substr, 3,10)
+##### ------------- KABLE
+library(kableExtra)
+columns = c(" ","N Speeches", "Mean Paras",  "Mean Words","Min Date", "Max Date",
+            "N Speeches", "Mean Paras",  "Mean Words","Min Date", "Max Date",
+            "N Speeches", "Mean Paras",  "Mean Words","Min Date", "Max Date"
+            )
+kbl(table2, row.names = F, format = "latex", col.names = columns,format.args = list(big.mark = ","),booktabs = T) %>%
+  kable_minimal() %>%
+  add_header_above(c(" " = 1, "Both Parties" = 5, "Republican" = 5, "Democrat" = 5))
+```
+
+```{r missing dates}
+# load full texts data
+Speech_descriptives = read.csv("speech_descriptives.csv")
+missing_dates_id = as.character(Speech_descriptives[is.na(Speech_descriptives$date),"Speech_id"])
+filenames = paste0("File_", missing_dates_id, ".txt")
+
+setwd("/Users/yuchenluo/Desktop/Measure_RadicalDiscourse/codes/Annenberg-data-with headers/")
+missed_dates_texts = sapply(filenames, readr::read_file)
+library(stringr)
+missed_dates = sapply(missed_dates_texts, sub, pattern = '.*\\(R\\)|.*\\(D\\)', replacement = "")
+missed_dates = sapply(missed_dates, substr, 1,5)
+
+missed_dates_df = data.frame(Speech_id = missing_dates_id, dates = missed_dates)
+missed_dates_df = left_join(missed_dates_df, Speech_descriptives %>% select(Speech_id, term), by = "Speech_id")
+missed_dates_df$date = paste( missed_dates_df$dates, missed_dates_df$term,sep = "/")
+
+
+
+```
+
+
+```{r drop later than election day}
+Speech_descriptives = Speech_descriptives_election[as.Date(Speech_descriptives_election$date) < as.Date(Speech_descriptives_election$election_date), ]
+```

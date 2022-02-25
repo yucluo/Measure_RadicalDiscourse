@@ -1,0 +1,143 @@
+---
+title: "make comparison plots"
+author: "Yuchen"
+date: "3/5/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+## exclusion pr auc
+
+```{r exclusion pr auc}
+pr_auc = read.csv("exclusion_pr_auc.csv")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = pr_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for Exclusion Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none") 
+
+```
+
+```{r exclusion roc auc}
+roc_auc = read.csv("exclusion_auc.csv")
+roc_auc$model_iteration <- factor(roc_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for Exclusion Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none") 
+
+
+```
+
+
+## inclusion
+```{r inclusion}
+pr_auc = read.csv("inclusion_pr_auc.csv")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = pr_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for Inclusion Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+
+
+```
+
+```{r inclusion roc auc}
+roc_auc = read.csv("inclusion_auc.csv")
+roc_auc$model_iteration <- factor(roc_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for Inclusion Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none") 
+
+```
+
+## Low Pride
+```{r low pride pr auc}
+pr_auc = read.csv("low_pride_pr_auc.csv")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = PR_AUC, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for Low Pride Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+
+```
+
+```{r low pride roc auc}
+roc_auc  = read.csv("low_pride_auc.csv")
+roc_auc$model_iteration <- factor(roc_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for Low Pride Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+```
+```{r high pride pr auc}
+pr_auc = read.csv("high_pride_pr_auc.csv")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = pr_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for High Pride Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+
+```
+```{r high pride roc auc}
+roc_auc  = read.csv("high_pride_auc.csv")
+roc_auc$model_iteration <- factor(roc_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for High Pride Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+```
+
+```{r auth pr auc}
+pr_auc = read.csv("auth_pr_auc.csv")
+pr_auc = pr_auc %>% filter(model_iteration != "RoBERTa -1")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -2', 'RoBERTa -3','RoBERTa -4'),ordered = TRUE)
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = pr_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for Authoritarian Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+
+```
+
+```{r auth roc auc}
+roc_auc  = read.csv("auth_auc.csv")
+pr_auc = pr_auc %>% filter(model_iteration != "RoBERTa -1")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -2', 'RoBERTa -3','RoBERTa -4'),ordered = TRUE)
+
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for Authoritarian Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+```
+
+```{r populism pr auc}
+pr_auc = read.csv("populism_pr_auc.csv")
+pr_auc$model_iteration <- factor(pr_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+pr_auc$colour = ifelse(pr_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(pr_auc, aes(x = model_iteration, y = pr_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("PR AUC Across Different Classifers and Iterations, for Populism Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+
+```
+
+```{r populism roc auc}
+roc_auc  = read.csv("populism_auc.csv")
+roc_auc$model_iteration <- factor(roc_auc$model_iteration,
+    levels = c('Random Forest','Balanced RFC', 'RoBERTa -1', 'RoBERTa -2','RoBERTa -3'),ordered = TRUE)
+
+roc_auc$colour = ifelse(roc_auc$model_iteration %in% c("Random Forest", "Balanced RFC"), 1, 0)
+ggplot(roc_auc, aes(x = model_iteration, y = roc_auc, color =as.factor(colour))) + 
+  geom_boxplot() + ggtitle("ROC AUC Across Different Classifers and Iterations, for Populism Dimension") + scale_color_manual(values = c("#52854C", "#D16103"))  + theme(legend.position = "none")
+```
+
